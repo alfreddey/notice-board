@@ -291,3 +291,12 @@ export function SketchyPen({ strokeColor = '#1e293b', className = '', ...props }
     </svg>
   );
 }
+
+export function SketchyHand({ strokeColor = '#1e293b', className = '', ...props }: any) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} {...props}>
+      <path d="M 45,45 L 45,20 C 45,15 55,15 55,20 L 55,45 M 55,40 L 55,15 C 55,10 65,10 65,15 L 65,45 M 65,45 L 65,25 C 65,20 75,20 75,25 L 75,55 M 45,50 L 40,30 C 37,25 27,27 30,35 L 40,55 C 40,70 50,90 70,90 L 80,90 C 90,80 90,65 85,55 L 75,35" fill="none" stroke={strokeColor} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M 43,22 C 43,17 53,17 53,22 L 53,46 M 53,17 C 53,12 63,12 63,17 L 63,44 M 63,27 C 63,22 73,22 73,27 L 73,53 M 38,32 C 35,27 29,29 32,37 L 42,57" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

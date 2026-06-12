@@ -18,7 +18,8 @@ import {
   SketchyEraser,
   SketchyPencil,
   SketchySmiley,
-  SketchyPushPin
+  SketchyPushPin,
+  SketchyHand
 } from '@/components/SketchyShapes';
 
 interface Note {
@@ -85,7 +86,7 @@ export default function Page() {
   const [selectedColor, setSelectedColor] = useState(COLORS[0]);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  const [mode, setMode] = useState<'cursor' | 'draw' | 'stamp' | 'erase'>('cursor');
+  const [mode, setMode] = useState<'cursor' | 'draw' | 'stamp' | 'erase' | 'pan'>('cursor');
   const [penColor, setPenColor] = useState(PEN_COLORS[0]);
   const [brushSize, setBrushSize] = useState<number>(4);
   const [stampType, setStampType] = useState<'star' | 'heart' | 'smiley'>('heart');
@@ -94,6 +95,9 @@ export default function Page() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [draggingId, setDraggingId] = useState<string | null>(null);
+
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -119,7 +123,6 @@ export default function Page() {
         { id: '3', text: 'Build an app made entirely of SVGs', color: '#fef08a', rotation: -1, x: 250, y: 450, zIndex: 3 },
       ]);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoaded(true);
   }, []);
 
@@ -136,8 +139,8 @@ export default function Page() {
     const maxZ = notes.length > 0 ? Math.max(...notes.map(n => n.zIndex || 0)) : 0;
     
     // Position slightly offset from center
-    const rx = typeof window !== 'undefined' ? window.innerWidth / 2 - 150 + (Math.random() - 0.5) * 100 : 200;
-    const ry = typeof window !== 'undefined' ? window.innerHeight / 2 - 150 + (Math.random() - 0.5) * 100 : 200;
+    const rx = typeof window !== 'undefined' ? (window.innerWidth / 2 - 150 + (Math.random() - 0.5) * 100) - panOffset.x : 200 - panOffset.x;
+    const ry = typeof window !== 'undefined' ? (window.innerHeight / 2 - 150 + (Math.random() - 0.5) * 100) - panOffset.y : 200 - panOffset.y;
     
     setNotes([
       ...notes, 
@@ -193,17 +196,24 @@ export default function Page() {
 
   // Drawing Handlers
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Middle click triggers pan temporarily
+    if (e.button === 1 || mode === 'pan') {
+      setIsPanning(true);
+      if (typeof e.currentTarget.setPointerCapture === 'function') {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
+      return;
+    }
+    
     // Left click only to draw
     if (e.button !== 0) return;
     if (mode === 'draw') {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = e.clientX - panOffset.x;
+      const y = e.clientY - panOffset.y;
       setCurrentLine({ id: Date.now().toString(), points: [{ x, y }], color: penColor, width: brushSize });
     } else if (mode === 'stamp') {
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = e.clientX - panOffset.x;
+      const y = e.clientY - panOffset.y;
       setStickers([...stickers, {
         id: Date.now().toString(),
         type: stampType,
@@ -217,17 +227,32 @@ export default function Page() {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (isPanning) {
+      setPanOffset(prev => ({
+        x: prev.x + e.movementX,
+        y: prev.y + e.movementY
+      }));
+      return;
+    }
+
     if (mode !== 'draw' || !currentLine) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = e.clientX - panOffset.x;
+    const y = e.clientY - panOffset.y;
     setCurrentLine({
       ...currentLine,
       points: [...currentLine.points, { x, y }]
     });
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isPanning) {
+      setIsPanning(false);
+      if (typeof e.currentTarget.releasePointerCapture === 'function') {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+      return;
+    }
+
     if (currentLine) {
       setLines(prev => [...prev, currentLine]);
       setCurrentLine(null);
@@ -237,11 +262,17 @@ export default function Page() {
   if (!isLoaded) return null;
 
   return (
-    <div className="fixed inset-0 overflow-hidden font-kalam text-slate-800 touch-none select-none flex flex-col">
+    <div 
+      className={`fixed inset-0 overflow-hidden font-kalam text-slate-800 touch-none select-none flex flex-col ${isPanning ? 'cursor-grabbing' : mode === 'erase' ? 'cursor-alias' : mode === 'pan' ? 'cursor-grab' : mode !== 'cursor' ? 'cursor-crosshair' : ''}`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+    >
       {/* Background Pattern - Sketchy Grid */}
       <svg width="100%" height="100%" className="absolute inset-0 pointer-events-none z-0 opacity-60">
         <defs>
-          <pattern id="grid" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse">
+          <pattern id="grid" x="0" y="0" width="80" height="80" patternUnits="userSpaceOnUse" patternTransform={`translate(${panOffset.x}, ${panOffset.y})`}>
             <path d="M 0,0 L 0,80" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="5,5" opacity="0.5" />
             <path d="M 0,0 L 80,0" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="5,5" opacity="0.5" />
           </pattern>
@@ -249,22 +280,18 @@ export default function Page() {
         <rect width="100%" height="100%" fill="url(#grid)" />
       </svg>
 
-      {/* Drawing Canvas layer */}
-      <div 
-        className={`absolute inset-0 z-0 touch-none ${mode === 'erase' ? 'cursor-alias' : mode !== 'cursor' ? 'cursor-crosshair' : ''}`}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-        <svg className={`w-full h-full ${mode === 'erase' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-          {lines.map(line => (
-            <g key={line.id} onPointerDown={(e) => {
-              if (mode === 'erase') {
-                e.stopPropagation();
-                removeLine(line.id);
-              }
-            }} className={mode === 'erase' ? 'cursor-pointer hover:opacity-50' : 'pointer-events-none'}>
+      {/* Pan Wrapper for Canvas Content */}
+      <div className="absolute inset-0 z-0 origin-top-left pointer-events-none" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px)` }}>
+        {/* Drawing Canvas layer */}
+        <div className="absolute inset-0 z-0 touch-none pointer-events-none">
+          <svg className={`overflow-visible absolute top-0 left-0 w-full h-full ${mode === 'erase' ? 'pointer-events-auto' : 'pointer-events-none'}`}>
+            {lines.map(line => (
+              <g key={line.id} onPointerDown={(e) => {
+                if (mode === 'erase') {
+                  e.stopPropagation();
+                  removeLine(line.id);
+                }
+              }} className={mode === 'erase' ? 'cursor-pointer hover:opacity-50' : 'pointer-events-none'}>
               {mode === 'erase' && (
                 <polyline 
                   points={line.points.map(p => `${p.x},${p.y}`).join(' ')} 
@@ -386,7 +413,7 @@ export default function Page() {
               onClick={() => {
                 if (mode === 'erase') removeNote(note.id);
               }}
-              className={`absolute top-0 left-0 w-64 p-6 min-h-[220px] flex flex-col group transition-opacity ${mode === 'erase' ? 'cursor-pointer hover:opacity-50 pointer-events-auto' : mode === 'cursor' && !note.pinned ? 'cursor-grab active:cursor-grabbing pointer-events-auto' : 'pointer-events-none'} ${note.completed && mode !== 'erase' ? 'opacity-80' : ''}`}
+              className={`absolute top-0 left-0 w-64 p-6 min-h-[220px] flex flex-col group transition-opacity ${mode === 'erase' ? 'cursor-pointer hover:opacity-50 pointer-events-auto' : mode === 'cursor' ? (note.pinned ? 'pointer-events-auto' : 'cursor-grab active:cursor-grabbing pointer-events-auto') : 'pointer-events-none'} ${note.completed && mode !== 'erase' ? 'opacity-80' : ''}`}
               style={{ zIndex: note.zIndex } as any}
             >
               <div className="absolute inset-0 pointer-events-none z-[-1]" style={{ filter: draggingId === note.id ? "drop-shadow(15px 25px 20px rgba(0,0,0,0.25))" : "drop-shadow(2px 5px 6px rgba(0,0,0,0.15))", transition: "filter 0.2s" }}>
@@ -421,8 +448,8 @@ export default function Page() {
                       <button key={c} onPointerDown={(e) => { 
                         e.stopPropagation(); 
                         setNotes(notes.map(n => n.id === note.id ? { ...n, color: c } : n));
-                      }} className="w-6 h-6 wobble-hover outline-none">
-                         <SketchyCircle fillColor={c} strokeColor={note.color === c ? '#000' : 'transparent'} className={note.color === c ? 'scale-125' : ''} />
+                      }} className="relative w-6 h-6 wobble-hover outline-none">
+                         <SketchyCircle fillColor={c} strokeColor={note.color === c ? '#000' : 'transparent'} className={`absolute inset-0 w-full h-full -z-10 ${note.color === c ? 'scale-125' : ''}`} />
                       </button>
                     ))}
                     <button 
@@ -455,7 +482,7 @@ export default function Page() {
                 <div className="absolute bottom-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 pl-2 pt-2 bg-gradient-to-tl from-black/5 to-transparent rounded-full">
                   <button 
                     onClick={(e) => { e.stopPropagation(); setEditingId(note.id); setEditingText(note.text); }}
-                    className="w-10 h-10 p-2 wobble-hover outline-none"
+                    className="relative w-10 h-10 p-2 wobble-hover outline-none"
                     aria-label="Edit"
                   >
                     <SketchyBox fillColor="#bae6fd" strokeColor="#0284c7" />
@@ -463,15 +490,15 @@ export default function Page() {
                   </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); toggleComplete(note.id); }}
-                    className="w-10 h-10 p-2 wobble-hover outline-none"
+                    className="relative w-10 h-10 p-2 wobble-hover outline-none"
                     aria-label="Toggle Complete"
                   >
-                    <SketchyCircle fillColor="#dcfce7" strokeColor="#16a34a" />
+                    <SketchyCircle className="absolute inset-0 w-full h-full -z-10" fillColor="#dcfce7" strokeColor="#16a34a" />
                     <SketchyCheck className="w-full h-full relative z-10 pointer-events-none p-1" strokeColor="#16a34a" />
                   </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); togglePin(note.id); }}
-                    className={`w-10 h-10 p-2 wobble-hover outline-none ${note.pinned ? 'opacity-100' : 'opacity-70'}`}
+                    className={`relative w-10 h-10 p-2 wobble-hover outline-none ${note.pinned ? 'opacity-100' : 'opacity-70'}`}
                     aria-label="Toggle Pin"
                   >
                     <SketchyBox fillColor={note.pinned ? "#fecaca" : "#f1f5f9"} strokeColor={note.pinned ? "#ef4444" : "#94a3b8"} />
@@ -479,7 +506,7 @@ export default function Page() {
                   </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); removeNote(note.id); }}
-                    className="w-10 h-10 p-2 wobble-hover outline-none"
+                    className="relative w-10 h-10 p-2 wobble-hover outline-none"
                     aria-label="Delete"
                   >
                     <SketchyBox fillColor="#fee2e2" strokeColor="#ef4444" />
@@ -490,6 +517,7 @@ export default function Page() {
             </motion.div>
           ))}
         </AnimatePresence>
+      </div>
       </div>
 
       {/* Top Floating UI (Title & Form) */}
@@ -526,7 +554,7 @@ export default function Page() {
                     className="w-6 h-6 relative wobble-hover cursor-pointer"
                     aria-label={`Select color ${c}`}
                   >
-                     <SketchyCircle fillColor={c} strokeColor={selectedColor === c ? '#000' : 'transparent'} className={selectedColor === c ? 'scale-110' : ''} />
+                     <SketchyCircle fillColor={c} strokeColor={selectedColor === c ? '#000' : 'transparent'} className={`absolute inset-0 w-full h-full -z-10 ${selectedColor === c ? 'scale-110' : ''}`} />
                   </button>
                 ))}
               </div>
@@ -554,8 +582,17 @@ export default function Page() {
               onClick={() => setMode('cursor')}
               className={`relative w-12 h-12 p-3 wobble-hover transition-transform ${mode === 'cursor' ? 'scale-110' : 'opacity-70'}`}
             >
-              <SketchyCircle fillColor={mode === 'cursor' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
+              <SketchyCircle className="absolute inset-0 w-full h-full -z-10" fillColor={mode === 'cursor' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
               <SketchyCursor className="w-full h-full relative z-10 pointer-events-none" strokeColor="#1e293b" />
+            </button>
+
+            <button 
+              title="Pan"
+              onClick={() => setMode('pan')}
+              className={`relative w-12 h-12 p-3 wobble-hover transition-transform ${mode === 'pan' ? 'scale-110' : 'opacity-70'}`}
+            >
+              <SketchyCircle className="absolute inset-0 w-full h-full -z-10" fillColor={mode === 'pan' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
+              <SketchyHand className="w-full h-full relative z-10 pointer-events-none" strokeColor="#1e293b" />
             </button>
 
             <button 
@@ -563,7 +600,7 @@ export default function Page() {
               onClick={() => setMode('draw')}
               className={`relative w-12 h-12 p-3 wobble-hover transition-transform ${mode === 'draw' ? 'scale-110' : 'opacity-70'}`}
             >
-              <SketchyCircle fillColor={mode === 'draw' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
+              <SketchyCircle className="absolute inset-0 w-full h-full -z-10" fillColor={mode === 'draw' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
               <SketchyPen className="w-full h-full relative z-10 pointer-events-none" strokeColor="#1e293b" />
             </button>
 
@@ -572,7 +609,7 @@ export default function Page() {
               onClick={() => setMode('stamp')}
               className={`relative w-12 h-12 p-3 wobble-hover transition-transform ${mode === 'stamp' ? 'scale-110' : 'opacity-70'}`}
             >
-              <SketchyCircle fillColor={mode === 'stamp' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
+              <SketchyCircle className="absolute inset-0 w-full h-full -z-10" fillColor={mode === 'stamp' ? '#fef08a' : '#f1f5f9'} strokeColor="#1e293b" />
               <SketchyHeart className="w-full h-full relative z-10 pointer-events-none" strokeColor="#1e293b" fillColor={mode === 'stamp' ? '#fbcfe8' : 'transparent'} />
             </button>
 
@@ -581,7 +618,7 @@ export default function Page() {
               onClick={() => setMode('erase')}
               className={`relative w-12 h-12 p-3 wobble-hover transition-transform ${mode === 'erase' ? 'scale-110' : 'opacity-70'}`}
             >
-              <SketchyCircle fillColor={mode === 'erase' ? '#fee2e2' : '#f1f5f9'} strokeColor="#1e293b" />
+              <SketchyCircle className="absolute inset-0 w-full h-full -z-10" fillColor={mode === 'erase' ? '#fee2e2' : '#f1f5f9'} strokeColor="#1e293b" />
               <SketchyEraser className="w-full h-full relative z-10 pointer-events-none p-0.5" strokeColor="#1e293b" />
             </button>
           </div>
@@ -598,7 +635,7 @@ export default function Page() {
                   onClick={() => setPenColor(c)}
                   className="w-8 h-8 relative wobble-hover cursor-pointer"
                 >
-                  <SketchyCircle fillColor={c} strokeColor={penColor === c ? '#000' : 'transparent'} className={penColor === c ? 'scale-125' : ''} />
+                  <SketchyCircle fillColor={c} strokeColor={penColor === c ? '#000' : 'transparent'} className={`absolute inset-0 w-full h-full -z-10 ${penColor === c ? 'scale-125' : ''}`} />
                 </button>
               ))}
 
@@ -623,7 +660,7 @@ export default function Page() {
                   onClick={() => setStampColor(c)}
                   className="w-8 h-8 relative wobble-hover cursor-pointer"
                 >
-                  <SketchyCircle fillColor={c} strokeColor={stampColor === c ? '#000' : 'transparent'} className={stampColor === c ? 'scale-125' : ''} />
+                  <SketchyCircle fillColor={c} strokeColor={stampColor === c ? '#000' : 'transparent'} className={`absolute inset-0 w-full h-full -z-10 ${stampColor === c ? 'scale-125' : ''}`} />
                 </button>
               ))}
 
