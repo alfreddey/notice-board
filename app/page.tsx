@@ -323,7 +323,7 @@ export default function Page() {
               initial={{ x: sticker.x - 50, y: sticker.y - 50, opacity: 0, scale: 0, rotate: sticker.rotation - 45 }}
               animate={{ x: sticker.x - 50, y: sticker.y - 50, opacity: 1, scale: sticker.scale, rotate: sticker.rotation }}
               exit={{ opacity: 0, scale: 0 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 500, mass: 0.5 }}
+              transition={{ type: 'spring', damping: 14, stiffness: 350, mass: 0.8 }}
               whileDrag={{ 
                 scale: sticker.scale * 1.25, 
                 rotate: sticker.rotation + 10,
@@ -375,7 +375,7 @@ export default function Page() {
               initial={{ x: note.x, y: note.y, opacity: 0, scale: 0.8, rotate: note.rotation - 15 }}
               animate={{ x: note.x, y: note.y, opacity: 1, scale: 1, rotate: note.rotation }}
               exit={{ opacity: 0, scale: 0.8, rotate: note.rotation + 15 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 500, mass: 0.5 }}
+              transition={{ type: 'spring', damping: 14, stiffness: 350, mass: 0.8 }}
               whileHover={mode === 'cursor' && !note.pinned ? { scale: 1.02, rotate: note.rotation + 1 } : undefined}
               whileDrag={{ 
                 scale: 1.08, 

@@ -1,20 +1,5 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Noticeboard Sketch
 
-# Run and deploy your AI Studio app
+An interactive whiteboard made entirely with hand-drawn SVG shapes and cursors.
 
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/66a3c1d7-0481-44e2-816a-a0c333ee2780
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+![App Screenshot](./src/assets/images/app_screenshot_1781275062821.jpg)
